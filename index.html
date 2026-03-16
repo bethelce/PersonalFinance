@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -38,6 +38,7 @@ const CATS=[
   {id:"parents",label:"Parents Allowance",icon:"👨‍👩‍👧",color:"#F59E0B"},
   {id:"church",label:"Church / Tithes",icon:"⛪",color:"#84CC16"},
   {id:"beauty",label:"Beauty & Make-up",icon:"💄",color:"#F472B6"},
+  {id:"investment",label:"Investment",icon:"📈",color:"#34D399"},
   {id:"other",label:"Other",icon:"📦",color:"#94A3B8"},
 ];
 const INCATS=[
@@ -216,7 +217,10 @@ function App(){
   const incs=mTxns.filter(t=>t.type==="income");
   const totExp=exps.reduce((s,t)=>s+Number(t.amount),0);
   const totInc=incs.reduce((s,t)=>s+Number(t.amount),0);
-  const net=totInc-totExp;
+  // CC expenses NOT deducted from cash net -- they show up as payables on due date
+  const cashExps=exps.filter(t=>!t.isCC).reduce((s,t)=>s+Number(t.amount),0);
+  const ccExps=exps.filter(t=>t.isCC).reduce((s,t)=>s+Number(t.amount),0);
+  const net=totInc-cashExps;
 
   const expByCat={};CATS.forEach(c=>{expByCat[c.id]=0;});
   exps.forEach(t=>{expByCat[t.category]=(expByCat[t.category]||0)+Number(t.amount);});
@@ -391,8 +395,8 @@ function App(){
         {/* ── DASHBOARD ── */}
         {view==="dashboard"&&(
           <div style={{paddingTop:"16px"}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"9px",marginBottom:"14px"}}>
-              {[{l:"Income",v:totInc,c:"#22C55E",i:"⬆️"},{l:"Expenses",v:totExp,c:"#F97316",i:"⬇️"},{l:"Net",v:net,c:net>=0?"#22C55E":"#EF4444",i:net>=0?"✅":"⚠️"}].map((card,idx)=>(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"9px",marginBottom:"14px"}}>
+              {[{l:"Income",v:totInc,c:"#22C55E",i:"⬆️"},{l:"Cash Out",v:cashExps,c:"#F97316",i:"⬇️"},{l:"CC Charges",v:ccExps,c:"#F59E0B",i:"💳"},{l:"Cash Net",v:net,c:net>=0?"#22C55E":"#EF4444",i:net>=0?"✅":"⚠️"}].map((card,idx)=>(
                 <div key={idx} style={{background:"rgba(255,255,255,0.04)",borderRadius:"14px",padding:"13px 8px",border:"1px solid rgba(255,255,255,0.06)",textAlign:"center"}}>
                   <div style={{fontSize:"15px",marginBottom:"3px"}}>{card.i}</div>
                   <div style={{fontSize:"9px",color:"rgba(255,255,255,0.38)",textTransform:"uppercase",letterSpacing:"0.5px",marginBottom:"2px"}}>{card.l}</div>
@@ -862,6 +866,43 @@ function App(){
                 </div>
               ))}
               <button onClick={()=>save({...data,rentalProperties:[...(data.rentalProperties||[]),{id:uid(),name:"",amount:""}]})} style={{width:"100%",padding:"9px",borderRadius:"10px",background:"rgba(255,255,255,0.05)",border:"1px dashed rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.45)",cursor:"pointer",fontSize:"13px",marginTop:"4px"}}>+ Dagdag na Property</button>
+            </div>
+
+            {/* Export / Import */}
+            <div style={{background:"rgba(255,255,255,0.04)",borderRadius:"18px",padding:"18px",border:"1px solid rgba(255,255,255,0.06)",marginBottom:"14px"}}>
+              <div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:"12px"}}>📦 Backup & Restore</div>
+              <p style={{fontSize:"12px",color:"rgba(255,255,255,0.45)",marginBottom:"14px",lineHeight:"1.6"}}>I-export ang data mo bilang JSON file. I-save sa iCloud Drive para ma-access sa ibang devices.</p>
+              <button onClick={()=>{
+                const exportData={...data,exportedAt:new Date().toISOString(),version:"kwartako_v4"};
+                const blob=new Blob([JSON.stringify(exportData,null,2)],{type:"application/json"});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement("a");
+                a.href=url;a.download="KwartaKo_backup.json";a.click();
+                URL.revokeObjectURL(url);
+                showToast("📦 Exported!");
+              }} style={{width:"100%",padding:"12px",borderRadius:"11px",background:"linear-gradient(135deg,#0EA5E9,#6366F1)",border:"none",color:"white",fontSize:"14px",fontWeight:"600",cursor:"pointer",marginBottom:"10px"}}>
+                📤 Export Data (JSON)
+              </button>
+              <label style={{width:"100%",display:"block"}}>
+                <div style={{width:"100%",padding:"12px",borderRadius:"11px",background:"rgba(255,255,255,0.07)",border:"1px dashed rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",fontSize:"14px",fontWeight:"600",cursor:"pointer",textAlign:"center"}}>
+                  📥 Import Data (JSON)
+                </div>
+                <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{
+                  const file=e.target.files[0];
+                  if(!file)return;
+                  const reader=new FileReader();
+                  reader.onload=ev=>{
+                    try{
+                      const imported=JSON.parse(ev.target.result);
+                      if(!imported.transactions)throw new Error("Invalid");
+                      save({...imported,setupDone:true});
+                      showToast("✅ Data imported!");
+                    }catch{showToast("❌ Invalid file");}
+                  };
+                  reader.readAsText(file);
+                  e.target.value="";
+                }}/>
+              </label>
             </div>
 
             {/* Danger Zone */}
